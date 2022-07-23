@@ -1,0 +1,167 @@
+
+glue job role name: demojobrole
+glue policy name : demopolicy
+
+
+
+steps and code artifacts (Glue Streaming, Athena Iceberg)
+
+Preface :- Please create a on-demand kinesis data stream
+
+a. Create database "icebergdemodb" in glue data catalogue
+b. Create Kinesis Source table in glue data catalogue
+	On the AWS Glue console, choose Data Catalog.
+	Choose Tables.
+	From the Add Table drop-down menu, choose Add table manually.
+	Select the database with the name "icebergdemodb".
+	For the table name, enter clickstreamtable.
+	Choose Kinesis as the type of source.
+		select Stream in my account
+		select Region
+		select Kinesis stream name
+	Choose Classification as "JSON"
+	For Schema Add column and add following columns with corresponding data types
+
+		year string,
+		month string,
+		day string,
+		hour string,
+		minute string,
+		customerid string,
+		firstname string,
+		lastname string,
+		dateofbirth string,
+		city string,
+		buildingnumber string,
+		streetaddress string,
+		state string,
+		zipcode string,
+		country string,
+		countrycode string,
+		phonenumber string,
+		productname string,
+		transactionamount int
+
+	Click Next, Review and Finish
+
+c. Create a Athena Table by running following query from the console (Update the S3 location)
+
+CREATE TABLE icebergdemodb.customer(
+year string,
+month string,
+day string,
+hour string,
+minute string,
+customerid string,
+firstname string,
+lastname string,
+dateofbirth string,
+city string,
+buildingnumber string,
+streetaddress string,
+state string,
+zipcode string,
+country string,
+countrycode string,
+phonenumber string,
+productname string,
+transactionamount int)
+
+
+LOCATION 's3://skicebergdemo/iceberg_custdata/'
+
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet',
+  'write_target_data_file_size_bytes'='536870912',
+  'optimize_rewrite_delete_file_threshold'='10'
+)
+
+d. Launch Kinesis Data Generator in your account with the help of following url :- 
+https://awslabs.github.io/amazon-kinesis-data-generator/web/help.html
+
+Use following template (Dummy Data)
+
+{
+    "year": "{{random.number({"min":2000,"max":2022})}}",
+    "month": "{{random.number({"min":1,"max":12})}}",
+    "day": "{{random.number({"min":1,"max":30})}}",
+    "hour": "{{random.number({"min":0,"max":24})}}",
+    "minute": "{{random.number({"min":0,"max":60})}}",
+    "customerid": {{random.number({"min":5023,"max":59874})}},
+	"firstname" : "{{name.firstName}}",
+	"lastname" : "{{name.lastName}}",
+	"dateofbirth" : "{{date.past(70)}}",
+	"city" : "{{address.city}}",
+	"buildingnumber" : {{random.number({"min":63,"max":947})}},
+	"streetaddress" : "{{address.streetAddress}}",
+	"state" : "{{address.state}}",
+	"zipcode" : "{{address.zipCode}}",
+	"country" : "{{address.country}}",
+	"countrycode" : "{{address.countryCode}}",
+	"phonenumber" : "{{phone.phoneNumber}}",
+	"productname" : "{{commerce.productName}}",
+    "transactionamount": {{random.number(
+        {
+            "min":10,
+            "max":150
+        }
+    )}}
+}
+
+e. Create a Glue Streaming Job with following job parameters and copy past the ETL script "icebergstrm.py"
+	Under Job Details 
+		IAM Role :- Must have ECR related permissions for connector to work
+		Type :- Spark Streaming
+		Glue version :- Glue 3.0
+		Worker type :- G 1X
+		Select "Automatically scale the number of workers"
+		Maximum number of workers :- 5
+		Under Advanced properties
+			Check Use Glue data catalog as the Hive metastore
+			Connections :- Select iceberg connection (created from marketplace in previous step)
+			Job parameters:
+				--iceberg_job_catalog_warehouse s3://skicebergdemo/iceberg_custdata/
+				--output_path s3://skicebergdemo
+
+f. Delete the Data based on the where clause :-
+select * FROM "icebergdemodb"."customer" WHERE customerid='34214'
+select count(*) FROM "icebergdemodb"."customer" WHERE customerid='34214'
+DELETE FROM "icebergdemodb"."customer" WHERE customerid='5023'
+select count(*) WHERE customerid='34214'
+
+More options below ("Updating Iceberg table data") 
+https://docs.aws.amazon.com/athena/latest/ug/querying-iceberg-updating-iceberg-table-data.html
+
+
+
+
+IAM policy definition:
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "iam:PassRole"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "s3:GetBucketLocation",
+                "s3:ListBucket",
+                "s3:GetBucketAcl",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::streamingicebergdemo",
+                "arn:aws:s3:::streamingicebergdemo/*"
+            ],
+            "Effect": "Allow"
+        }
+    ]
+}
