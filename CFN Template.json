@@ -1,0 +1,407 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "This template creates S3 bucket, IAM Roles and Amazon Cognito User Pool and Identity Pool, with a single user.  It assigns a role to authenticated users in the identity pool to enable the users to use the Kinesis Data Generator tool.",
+    "Parameters" : {
+  
+      "Username": {
+        "Description": "The username of the user you want to create in Amazon Cognito.",
+        "Type": "String",
+        "AllowedPattern": "^(?=\\s*\\S).*$",
+        "ConstraintDescription": " cannot be empty"
+      },
+      "Password": {
+        "Description": "The password of the user you want to create in Amazon Cognito.",
+        "Type": "String",
+        "NoEcho": true,
+        "AllowedPattern": "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,}$",
+        "ConstraintDescription": " must be at least 6 alpha-numeric characters, and contain at least one number"
+      },
+      "IAMGlueStreamingJobRoleName": {
+        "Description": "IAM Glue streaming Job role name.",
+        "Type": "String"
+      }
+    },
+    "Metadata": {
+      "AWS::CloudFormation::Interface": {
+        "ParameterGroups": [
+          {
+            "Label": {
+              "default": "Cognito User for Kinesis Data Generator"
+            },
+            "Parameters": [
+              "Username",
+              "Password"
+            ]
+          }
+        ]
+      }
+    },
+    "Resources" : {
+        
+      "EncryptedS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "streamingicebergdemo-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                }
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "GlueJobExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "RoleName": {"Ref": "IAMGlueStreamingJobRoleName"},
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{ "Effect": "Allow", "Principal": {"Service": ["glue.amazonaws.com"]}, "Action": ["sts:AssumeRole"] }]
+              },
+              "Path": "/",
+              "Policies": [{
+                "PolicyName": "demoscoped",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Action": [
+                                "iam:PassRole"
+                            ],
+                            "Resource": "*",
+                            "Effect": "Allow"
+                        },
+                        {
+                            "Action": [
+                                "s3:GetBucketLocation",
+                                "s3:ListBucket",
+                                "s3:GetBucketAcl",
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
+                            "Resource": [
+                                {"Fn::Sub": "arn:aws:s3:::streamingicebergdemo-${AWS::AccountId}"},
+                                {"Fn::Sub": "arn:aws:s3:::streamingicebergdemo-${AWS::AccountId}/*"}
+                            ],
+                            "Effect": "Allow"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "ecr:GetAuthorizationToken",
+                                "ecr:BatchCheckLayerAvailability",
+                                "ecr:GetDownloadUrlForLayer",
+                                "ecr:GetRepositoryPolicy",
+                                "ecr:DescribeRepositories",
+                                "ecr:ListImages",
+                                "ecr:DescribeImages",
+                                "ecr:BatchGetImage",
+                                "ecr:GetLifecyclePolicy",
+                                "ecr:GetLifecyclePolicyPreview",
+                                "ecr:ListTagsForResource",
+                                "ecr:DescribeImageScanFindings"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "kinesis:Get*",
+                                "kinesis:List*",
+                                "kinesis:Describe*"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "glue:*",
+                                "s3:GetBucketLocation",
+                                "s3:ListBucket",
+                                "s3:ListAllMyBuckets",
+                                "s3:GetBucketAcl",
+                                "ec2:DescribeVpcEndpoints",
+                                "ec2:DescribeRouteTables",
+                                "ec2:CreateNetworkInterface",
+                                "ec2:DeleteNetworkInterface",
+                                "ec2:DescribeNetworkInterfaces",
+                                "ec2:DescribeSecurityGroups",
+                                "ec2:DescribeSubnets",
+                                "ec2:DescribeVpcAttribute",
+                                "iam:ListRolePolicies",
+                                "iam:GetRole",
+                                "iam:GetRolePolicy",
+                                "cloudwatch:PutMetricData"
+                            ],
+                            "Resource": [
+                                "*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:CreateBucket"
+                            ],
+                            "Resource": [
+                                "arn:aws:s3:::aws-glue-*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
+                            "Resource": [
+                                "arn:aws:s3:::aws-glue-*/*",
+                                "arn:aws:s3:::*/*aws-glue-*/*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject"
+                            ],
+                            "Resource": [
+                                "arn:aws:s3:::crawler-public*",
+                                "arn:aws:s3:::aws-glue-*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": [
+                                "arn:aws:logs:*:*:/aws-glue/*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "ec2:CreateTags",
+                                "ec2:DeleteTags"
+                            ],
+                            "Condition": {
+                                "ForAllValues:StringEquals": {
+                                    "aws:TagKeys": [
+                                        "aws-glue-service-resource"
+                                    ]
+                                }
+                            },
+                            "Resource": [
+                                "arn:aws:ec2:*:*:network-interface/*",
+                                "arn:aws:ec2:*:*:security-group/*",
+                                "arn:aws:ec2:*:*:instance/*"
+                            ]
+                        }
+                    ]
+                }
+              }]
+            }
+          },
+
+  
+      "DataGenCognitoSetupLambdaFunc" : {
+        "Type" : "AWS::Lambda::Function",
+        "Properties" : {
+          "Code": {
+            "S3Bucket" : {"Fn::Join": ["", [ "aws-kdg-tools-", {"Ref": "AWS::Region"}]]},
+            "S3Key": "datagen-cognito-setup.zip"
+          },
+          "Description": "Creates a Cognito User Pool, Identity Pool, and a User.  Returns IDs to be used in the Kinesis Data Generator.",
+          "FunctionName": "KinesisDataGeneratorCognitoSetup",
+          "Handler": "createCognitoPool.createPoolAndUser",
+          "Role": { "Fn::GetAtt" : ["LambdaExecutionRole", "Arn"] },
+          "Runtime": "nodejs12.x",
+          "Timeout": 60
+        }
+      },
+      "LambdaExecutionRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{ "Effect": "Allow", "Principal": {"Service": ["lambda.amazonaws.com"]}, "Action": ["sts:AssumeRole"] }]
+          },
+          "Path": "/",
+          "Policies": [{
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [ 
+                    "arn:aws:logs:*:*:log-group:/aws/lambda/KinesisDataGeneratorCognitoSetup*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cognito-idp:AdminConfirmSignUp",
+                    "cognito-idp:CreateUserPoolClient",
+                    "cognito-idp:AdminCreateUser"
+                  ],
+                  "Resource": [
+                    "arn:aws:cognito-idp:*:*:userpool/*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cognito-idp:CreateUserPool",
+                    "cognito-identity:CreateIdentityPool",
+                    "cognito-identity:SetIdentityPoolRoles"
+                  ],
+                  "Resource": "*" },
+                {
+                  "Effect": "Allow",
+                  "Action": ["iam:UpdateAssumeRolePolicy"],
+                  "Resource": [
+                    {"Fn::GetAtt" : ["AuthenticatedUserRole", "Arn"] },
+                    {"Fn::GetAtt" : ["UnauthenticatedUserRole", "Arn"] }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["iam:PassRole"],
+                  "Resource": [
+                    {"Fn::GetAtt" : ["AuthenticatedUserRole", "Arn"] },
+                    {"Fn::GetAtt" : ["UnauthenticatedUserRole", "Arn"] }
+                  ]
+                }
+              ]
+            }
+          }]
+        }
+      },
+      "SetupCognitoCustom" : {
+        "Type": "Custom::DataGenCognitoSetupLambdaFunc",
+        "Properties": {
+          "ServiceToken": { "Fn::GetAtt" : ["DataGenCognitoSetupLambdaFunc", "Arn"] },
+          "Region": {"Ref": "AWS::Region"},
+          "Username": {"Ref": "Username"},
+          "Password": {"Ref": "Password"},
+          "AuthRoleName": {"Ref": "AuthenticatedUserRole"},
+          "AuthRoleArn": { "Fn::GetAtt" : ["AuthenticatedUserRole", "Arn"] },
+          "UnauthRoleName": {"Ref": "UnauthenticatedUserRole"},
+          "UnauthRoleArn": { "Fn::GetAtt" : ["UnauthenticatedUserRole", "Arn"] }
+  
+        }
+      },
+      "AuthenticatedUserRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{ "Effect": "Allow", "Principal": {"Federated": ["cognito-identity.amazonaws.com"]}, "Action": ["sts:AssumeRoleWithWebIdentity"] }]
+          },
+          "Path": "/",
+          "Policies": [{
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Action": [
+                    "kinesis:DescribeStream",
+                    "kinesis:PutRecord",
+                    "kinesis:PutRecords"
+                  ],
+                  "Resource": [
+                    "arn:aws:kinesis:*:*:stream/*"
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "firehose:DescribeDeliveryStream",
+                    "firehose:PutRecord",
+                    "firehose:PutRecordBatch"
+                  ],
+                  "Resource": [
+                    "arn:aws:firehose:*:*:deliverystream/*"
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "ec2:DescribeRegions",
+                    "firehose:ListDeliveryStreams",
+                    "kinesis:ListStreams"
+                  ],
+                  "Resource": [
+                    "*"
+                  ],
+                  "Effect": "Allow"
+                }
+              ]
+            }
+          }]
+        }
+      },
+      "UnauthenticatedUserRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{ "Effect": "Allow", "Principal": {"Federated": ["cognito-identity.amazonaws.com"]}, "Action": ["sts:AssumeRoleWithWebIdentity"] }]
+          },
+          "Path": "/",
+          "Policies": [{
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "*"
+                  ],
+                  "Resource": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          }]
+        }
+      }
+    },
+    "Outputs":{
+      "KinesisDataGeneratorUrl": {
+        "Description": "The URL for your Kinesis Data Generator.",
+        "Value": {
+          "Fn::Join": ["", ["https://awslabs.github.io/amazon-kinesis-data-generator/web/producer.html?", { "Fn::GetAtt": [ "SetupCognitoCustom", "Querystring" ] }]]
+        }
+      },
+      "BucketName": {
+        "Value": {
+            "Ref": "EncryptedS3Bucket"
+        },
+        "Description": "Name of the sample Amazon S3 bucket with a notification configuration."
+    },
+    "GlueJobExecutionRole": {
+        "Value": {
+            "Ref": "GlueJobExecutionRole"
+        },
+        "Description": "Name of the sample Glue Streaming Job Execution Role."
+    }
+    }
+  }
