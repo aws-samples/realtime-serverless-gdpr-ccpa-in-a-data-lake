@@ -13,13 +13,13 @@ from pyspark.sql.functions import rank, max
 
 from pyspark.conf import SparkConf
 
-args = getResolvedOptions(sys.argv, ['JOB_NAME', 'iceberg_job_catalog_warehouse', 'output_path'])
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'iceberg_job_catalog_warehouse', 'output_path', 'kinesis_arn'])
 conf = SparkConf()
 
-# S3 sink params
+# Kinesis Stream and S3 sink params"--output_path; --iceberg_job_catalog_warehouse, --kinesis_arn"
 
 output_path = args['output_path']
-
+strm_arn = args['kinesis_arn']
 s3_target = args['iceberg_job_catalog_warehouse']
 checkpoint_location = output_path + "/cp/"
 temp_path = output_path + "/tmp/"
@@ -77,11 +77,17 @@ def processBatch(dataFrame, batchId):
 
 ## Read Input Kinesis Data Stream 
 
-sourceData = glueContext.create_data_frame.from_catalog( \
-    database = "icebergdemodb", \
-    table_name = "clickstreamtable", \
-    transformation_ctx = "datasource0", \
-    additional_options = {"startingPosition": "TRIM_HORIZON", "inferSchema": "true"})
+sourceData = glueContext.create_data_frame.from_options(
+    connection_type="kinesis",
+    connection_options={
+        "typeOfData": "kinesis",
+        "streamARN": strm_arn,
+        "classification": "json",
+        "startingPosition": "earliest",
+        "inferSchema": "true",
+    },
+    transformation_ctx="datasource0",
+)
 
 
 sourceData.printSchema()
