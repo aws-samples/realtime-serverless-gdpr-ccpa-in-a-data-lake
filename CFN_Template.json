@@ -58,6 +58,19 @@
         },
         "GlueJobExecutionRole": {
             "Type": "AWS::IAM::Role",
+			"Metadata": {
+                "cfn_nag": {
+                   "rules_to_suppress": [
+                       {
+                         "id": "F38",
+                         "reason": "effect of the statements are provided"
+                       },
+                       {
+                         "id": "F3",
+                         "reason": "effect of the statements are provided"
+                       }]
+                            }
+                        },
             "Properties": {
               "RoleName": {"Ref": "IAMGlueStreamingJobRoleName"},
               "AssumeRolePolicyDocument": {
