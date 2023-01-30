@@ -41,6 +41,9 @@
       "EncryptedS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
+				"VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
                 "BucketName": {
                     "Fn::Sub": "streamingicebergdemo-${AWS::AccountId}"
                 },
